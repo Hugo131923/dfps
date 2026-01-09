@@ -1,15 +1,6 @@
-name: Build and Package DFPS
+name: Direct Build
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
-
-env:
-  NDK_VERSION: r25b
-  NDK_URL: https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+on: workflow_dispatch
 
 jobs:
   build:
@@ -18,41 +9,29 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Cache NDK
-      uses: actions/cache@v3
-      id: ndk-cache
-      with:
-        path: android-ndk-${{ env.NDK_VERSION }}
-        key: ${{ runner.os }}-ndk-${{ env.NDK_VERSION }}
-    
-    - name: Download NDK
-      if: steps.ndk-cache.outputs.cache-hit != 'true'
+    - name: Setup NDK
       run: |
-        wget -q ${{ env.NDK_URL }}
-        unzip -q android-ndk-${{ env.NDK_VERSION }}-linux.zip
-        rm android-ndk-${{ env.NDK_VERSION }}-linux.zip
-    
-    - name: Setup environment
+        wget https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+        unzip android-ndk-r25b-linux.zip
+        export ANDROID_NDK=$(pwd)/android-ndk-r25b
+        
+    - name: Manual Build
       run: |
-        echo "ANDROID_NDK=$(pwd)/android-ndk-${{ env.NDK_VERSION }}" >> $GITHUB_ENV
-        echo "$(pwd)/android-ndk-${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
-    
-    - name: Build and package
-      run: |
-        chmod +x build.sh
-        ./build.sh Release "make pack"
-        echo "Build completed successfully!"
-    
-    - name: Upload module package
+        # 直接使用 CMake 构建
+        mkdir -p build_manual && cd build_manual
+        cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android23-clang" \
+          -DCMAKE_CXX_COMPILER="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android23-clang++" \
+          ..
+        make -j4
+        
+        # 检查结果
+        file dfps
+        ls -lh dfps
+        
+    - name: Upload binary
       uses: actions/upload-artifact@v4
       with:
-        name: dfps-module
-        path: build/package/dfps-magisk.zip
-        retention-days: 7
-    
-    - name: Upload binary only
-      uses: actions/upload-artifact@v4
-      with:
-        name: dfps-binary
-        path: build/arm64/runnable/dfps
-        retention-days: 7
+        name: manual-build
+        path: build_manual/dfps
