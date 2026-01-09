@@ -1,0 +1,23 @@
+name: Quick Build and Get Binary
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          unzip -q android-ndk-r25b-linux.zip
+          export ANDROID_NDK=$(pwd)/android-ndk-r25b
+          chmod +x build.sh
+          ./build.sh Release "make"
+          
+          # 找到并输出二进制
+          find . -name "dfps" -type f -exec cp {} ./dfps_final \;
+          
+      - uses: actions/upload-artifact@v4
+        with:
+          name: final-binary
+          path: dfps_final
