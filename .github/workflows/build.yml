@@ -1,22 +1,28 @@
-# 创建 .github/workflows/build.yml，内容如下：
-name: Build
+name: Build DFPS
+
 on: [push, workflow_dispatch]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup NDK
-      run: |
-        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
-        unzip -q android-ndk-r25b-linux.zip
-        echo "ANDROID_NDK=$(pwd)/android-ndk-r25b" >> $GITHUB_ENV
-    - name: Build
-      run: |
-        chmod +x build.sh
-        ./build.sh Release "make pack"
-    - name: Upload
-      uses: actions/upload-artifact@v3
-      with:
-        name: module
-        path: build/package/
+      - uses: actions/checkout@v4
+      
+      - name: Setup NDK
+        run: |
+          wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          unzip -q android-ndk-r25b-linux.zip
+          echo "ANDROID_NDK=$(pwd)/android-ndk-r25b" >> $GITHUB_ENV
+          
+      - name: Build
+        run: |
+          chmod +x build.sh
+          ./build.sh Release "make pack"
+          
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: dfps-files
+          path: |
+            build/package/
+            build/arm64/runnable/
