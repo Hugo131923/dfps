@@ -296,7 +296,7 @@ void DynamicFps::SwitchRefreshRate(bool force) {
                 auto brightness = GetScreenBrightness();
                 lowBrightness_ = brightness < enableMinBrightness_;
             }
-            SwitchRefreshRate(lowBrightness_ ? rule.active : rule.idle);
+            SwitchRefreshRate(lowBrightness_ ? rule.idle : rule.active);
         });
     }
 }
