@@ -56,7 +56,6 @@ private:
     int64_t gestureSlackMs_;
     int enableMinBrightness_;
     int lowBrightnessFixedHz_;
-    bool lowBrightnessConfigChanged_;
 
     std::map<std::string, FpsRule> rules_;
     FpsRule offscreen_;
