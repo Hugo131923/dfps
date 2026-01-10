@@ -315,50 +315,71 @@ void DynamicFps::OnOffscreen(const void *data) {
 void DynamicFps::SwitchRefreshRate(bool force) {
     forceSwitch_ = force;
     
-    auto switchWork = [this](bool isActive) {
-        auto rule = GetCurrentRule();  // GetCurrentRule 现在会返回正确的规则（包括低亮度规则）
-        
-        // 添加亮度检测
+    HwSetWork(hw_, [this]() {
+        // 更新亮度状态
         if (brightnessTimer_.ElapsedS() > BRIGHTNESS_SAMPLE_INTERVAL_S) {
             brightnessTimer_.Reset();
             auto brightness = GetScreenBrightness();
+            bool oldLowBrightness = lowBrightness_;
             lowBrightness_ = brightness < enableMinBrightness_;
+            
+            if (oldLowBrightness != lowBrightness_) {
+                SPDLOG_INFO("亮度状态变化: {} -> {} (亮度值={})",
+                           oldLowBrightness ? "低亮度" : "正常亮度",
+                           lowBrightness_ ? "低亮度" : "正常亮度",
+                           brightness);
+            }
         }
         
-        // 确定目标刷新率
-        int targetHz = isActive ? rule.active : rule.idle;
+        // 获取当前适用的规则
+        auto rule = GetCurrentRule();
+        int targetHz = active_ ? rule.active : rule.idle;
         
-        // 添加调试日志
+        // 添加详细的调试日志
         const auto &pkgName = overridedApp_.empty() ? curApp_ : overridedApp_;
+        
+        // 判断规则类型
         std::string ruleType;
+        std::string brightnessMode = lowBrightness_ ? "低亮度" : "正常亮度";
         
         if (pkgName == OFFSCREEN_PKG_NAME) {
             ruleType = "锁屏规则";
-        } else if (lowBrightness_ && hasLowBrightnessRule_ && rules_.find(pkgName) == rules_.end()) {
-            // 注意：这里假设应用特定规则优先级高于低亮度规则
-            // 如果没有应用特定规则，且在低亮度状态，我们才认为是使用了低亮度规则
-            ruleType = "低亮度规则";
-        } else if (rules_.find(pkgName) != rules_.end()) {
-            ruleType = "应用规则";
+        } else if (lowBrightness_) {
+            // 低亮度时，需要判断是使用了低亮度规则还是应用规则
+            auto appIt = rules_.find(pkgName);
+            if (appIt != rules_.end()) {
+                // 有应用特定规则，应用规则优先级高
+                ruleType = "应用规则(低亮度覆盖)";
+            } else {
+                // 使用低亮度规则
+                ruleType = "低亮度规则";
+                
+                // 如果是通过 lowBrightnessFixedHz 转换的，特别标注
+                // 检查低亮度规则是否为固定值（idle == active）
+                if (lowBrightnessRule_.idle == lowBrightnessRule_.active) {
+                    ruleType = "低亮度固定规则(由lowBrightnessFixedHz转换)";
+                }
+            }
         } else {
-            ruleType = "默认规则";
+            // 正常亮度
+            auto appIt = rules_.find(pkgName);
+            if (appIt != rules_.end()) {
+                ruleType = "应用规则";
+            } else {
+                ruleType = "默认规则";
+            }
         }
         
-        SPDLOG_INFO("使用[{}]: {}Hz (应用={}, {}状态, 亮度={})", 
-                   ruleType,
-                   targetHz,
-                   pkgName,
-                   isActive ? "活动" : "空闲",
-                   lowBrightness_ ? "低" : "正常");
+        SPDLOG_INFO("[{}] {}Hz (应用={}, {}状态)", 
+                   ruleType, targetHz, pkgName, active_ ? "活动" : "空闲");
+        
+        // 如果还在使用 lowBrightnessFixedHz_ 模式（临时变量），也记录一下
+        if (lowBrightness_ && lowBrightnessFixedHz_ != 0) {
+            SPDLOG_DEBUG("lowBrightnessFixedHz旧参数值: {}", lowBrightnessFixedHz_);
+        }
         
         SwitchRefreshRate(targetHz);
-    };
-    
-    if (active_) {
-        HwSetWork(hw_, [switchWork]() { switchWork(true); });
-    } else {
-        HwSetWork(hw_, [switchWork]() { switchWork(false); });
-    }
+    });
 }
 
 void DynamicFps::SwitchRefreshRate(int hz) {
