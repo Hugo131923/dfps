@@ -55,13 +55,15 @@ private:
     int64_t touchSlackMs_;
     int64_t gestureSlackMs_;
     int enableMinBrightness_;
-    int lowBrightnessFixedHz_;
+    int lowBrightnessFixedHz_;        // 添加：低亮度规则1
 
     std::map<std::string, FpsRule> rules_;
     FpsRule offscreen_;
     FpsRule universial_;
+    FpsRule lowBrightnessRule_;        // 添加：低亮度规则2
     bool hasUniversial_;
     bool hasOffscreen_;
+    bool hasLowBrightnessRule_;        // 添加：是否有低亮度规则
     std::string notifyPath_;
 
     bool touchPressed_;
