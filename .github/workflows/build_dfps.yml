@@ -1,0 +1,51 @@
+name: Build DFPS Binary
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-dfps:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup NDK r25b
+      run: |
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+        unzip -q android-ndk-r25b-linux.zip
+        echo "ANDROID_NDK=$(pwd)/android-ndk-r25b" >> $GITHUB_ENV
+    
+    - name: Build with original script
+      run: |
+        chmod +x build.sh
+        echo "开始构建..."
+        ./build.sh Release "make"
+        
+        # 搜索构建的二进制文件
+        echo "搜索构建结果..."
+        BUILT_FILE=$(find . -name "dfps" -type f 2>/dev/null | head -1)
+        
+        if [ -n "$BUILT_FILE" ]; then
+          echo "找到文件: $BUILT_FILE"
+          cp "$BUILT_FILE" ./dfps
+          
+          # 验证文件
+          echo "验证文件:"
+          file ./dfps
+          ls -lh ./dfps
+        else
+          echo "错误：未找到 dfps 文件"
+          echo "检查 build 目录内容:"
+          find build/ -type f 2>/dev/null
+          exit 1
+        fi
+    
+    - name: Upload binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: dfps
+        path: dfps
+        retention-days: 7
