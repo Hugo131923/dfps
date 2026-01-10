@@ -159,15 +159,14 @@ void DynamicFps::SetTunable(const std::string &tunable, const std::string &value
         enableMinBrightness_ = std::min(MAX_ENABLE_MIN_BRIGHTNESS, std::stoi(value));
     } else if (tunable == "lowBrightnessFixedHz") {  // ← 添加这一行
         int newHz = std::stoi(value);
-        // 总是更新，即使值相同
         lowBrightnessFixedHz_ = newHz;
-        // 总是清除缓存，确保下次切换有效
-        curHz_ = -1;
-        SPDLOG_DEBUG("Set lowBrightnessFixedHz to {}", newHz);
+        curHz_ = INT32_MAX;  // 清除缓存
         
-        // 立即触发刷新率重新计算
-        forceSwitch_ = true;
-        SwitchRefreshRate(true);
+        // 如果当前处于低亮度模式，立即应用新设置
+        if (lowBrightness_) {
+            forceSwitch_ = true;
+            SwitchRefreshRate(true);
+        }
     } else {
         SPDLOG_WARN("Unknown tunable '{}' in the config file", tunable);
     }
