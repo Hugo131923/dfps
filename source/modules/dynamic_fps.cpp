@@ -47,6 +47,7 @@ DynamicFps::DynamicFps(const std::string &configPath, const std::string &notifyP
       touchSlackMs_(DEFAULT_TOUCH_SLACK_MS),
       gestureSlackMs_(DEFAULT_GESTURE_SLACK_MS),
       enableMinBrightness_(DEFAULT_ENABLE_MIN_BRIGHTNESS),
+      lowBrightnessFixedHz_(60),  // 添加这一行！默认值60
       hasUniversial_(false),
       hasOffscreen_(false),
       notifyPath_(notifyPath),
@@ -156,6 +157,8 @@ void DynamicFps::SetTunable(const std::string &tunable, const std::string &value
         touchSlackMs_ = std::max(MIN_TOUCH_SLACK_MS, std::stoi(value));
     } else if (tunable == "enableMinBrightness") {
         enableMinBrightness_ = std::min(MAX_ENABLE_MIN_BRIGHTNESS, std::stoi(value));
+    } else if (tunable == "lowBrightnessFixedHz") {  // ← 添加这一行
+        lowBrightnessFixedHz_ = std::stoi(value);     // ← 添加这一行
     } else {
         SPDLOG_WARN("Unknown tunable '{}' in the config file", tunable);
     }
@@ -286,7 +289,17 @@ void DynamicFps::SwitchRefreshRate(bool force) {
     if (active_) {
         HwSetWork(hw_, [this]() {
             auto rule = GetCurrentRule();
-            SwitchRefreshRate(rule.active);
+            // 添加亮度检测
+            if (brightnessTimer_.ElapsedS() > BRIGHTNESS_SAMPLE_INTERVAL_S) {
+                brightnessTimer_.Reset();
+                auto brightness = GetScreenBrightness();
+                lowBrightness_ = brightness < enableMinBrightness_;
+            }
+            if (lowBrightness_) {
+                SwitchRefreshRate(lowBrightnessFixedHz_);  // 使用配置的固定刷新率
+            } else {
+                SwitchRefreshRate(rule.active);  // 正常亮度时用原逻辑
+            }
         });
     } else {
         HwSetWork(hw_, [this]() {
@@ -296,7 +309,11 @@ void DynamicFps::SwitchRefreshRate(bool force) {
                 auto brightness = GetScreenBrightness();
                 lowBrightness_ = brightness < enableMinBrightness_;
             }
-            SwitchRefreshRate(lowBrightness_ ? rule.idle : rule.active);
+            if (lowBrightness_) {
+                SwitchRefreshRate(lowBrightnessFixedHz_);  // 使用配置的固定刷新率
+            } else {
+                SwitchRefreshRate(rule.idle);  // 正常亮度时用原逻辑
+            }
         });
     }
 }
