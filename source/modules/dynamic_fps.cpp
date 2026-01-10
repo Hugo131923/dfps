@@ -48,7 +48,6 @@ DynamicFps::DynamicFps(const std::string &configPath, const std::string &notifyP
       gestureSlackMs_(DEFAULT_GESTURE_SLACK_MS),
       enableMinBrightness_(DEFAULT_ENABLE_MIN_BRIGHTNESS),
       lowBrightnessFixedHz_(60),  // 添加这一行！默认值60
-      lowBrightnessConfigChanged_(false),  // 添加这一行
       hasUniversial_(false),
       hasOffscreen_(false),
       notifyPath_(notifyPath),
@@ -160,17 +159,8 @@ void DynamicFps::SetTunable(const std::string &tunable, const std::string &value
         enableMinBrightness_ = std::min(MAX_ENABLE_MIN_BRIGHTNESS, std::stoi(value));
     } else if (tunable == "lowBrightnessFixedHz") {  // ← 添加这一行
         int newHz = std::stoi(value);
-        if (newHz != lowBrightnessFixedHz_) {
-            lowBrightnessFixedHz_ = newHz;
-            lowBrightnessConfigChanged_ = true;  // 设置变化标志
-            SPDLOG_INFO("lowBrightnessFixedHz changed to {}", newHz);
-            
-            // 如果当前处于低亮度模式，立即应用新设置
-            if (lowBrightness_) {
-                forceSwitch_ = true;
-                SwitchRefreshRate(true);
-            }
-        }
+        lowBrightnessFixedHz_ = newHz;  // 直接赋值
+        SPDLOG_DEBUG("Set lowBrightnessFixedHz to {}", newHz);
     } else {
         SPDLOG_WARN("Unknown tunable '{}' in the config file", tunable);
     }
@@ -334,12 +324,22 @@ void DynamicFps::SwitchRefreshRate(int hz) {
     auto force = forceSwitch_;
     forceSwitch_ = false;
     
-    // 检查配置是否变化
-    if (lowBrightnessConfigChanged_) {
-        SPDLOG_DEBUG("Config change detected, forcing switch");
-        lowBrightnessConfigChanged_ = false;
+    // 使用静态变量跟踪lowBrightnessFixedHz的变化
+    static int lastLowBrightnessFixedHz = lowBrightnessFixedHz_;
+    static bool configChanged = false;
+    
+    if (lastLowBrightnessFixedHz != lowBrightnessFixedHz_) {
+        SPDLOG_DEBUG("lowBrightnessFixedHz changed from {} to {}", 
+                   lastLowBrightnessFixedHz, lowBrightnessFixedHz_);
+        lastLowBrightnessFixedHz = lowBrightnessFixedHz_;
+        configChanged = true;
+    }
+    
+    if (configChanged) {
+        SPDLOG_DEBUG("Config changed, forcing switch");
+        configChanged = false;
         force = true;
-        curHz_ = -1;  // 清除缓存
+        curHz_ = -1;  // 清除缓存，确保切换执行
     }
     
     SPDLOG_DEBUG("switch {} (force={})", hz, force);
